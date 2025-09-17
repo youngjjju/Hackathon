@@ -1,0 +1,8 @@
+{
+  "THRESH_G": 3.2,
+  "HOLD_MS": 12,
+  "SOFT_G": 2.6,
+  "SOFT_HOLD_MS": 10,
+  "THRESH_JERK": 300,
+  "IMPULSE_MIN": 40.0
+}
