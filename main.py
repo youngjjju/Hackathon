@@ -23,7 +23,7 @@ def main():
     # -------------------------
     # 모델 불러오기
     # -------------------------
-    ort_session = ort.InferenceSession("/home/youngju/Hackathon/youngju/weight/video_classifier.onnx")
+    ort_session = ort.InferenceSession("/home/youngjju/Hackathon/youngju/weight/video_classifier_fp16.onnx")
     # -------------------------
     # 프레임 입력
     # -------------------------
@@ -45,7 +45,7 @@ def main():
 
             with torch.no_grad():
                 # (1, T, C, H, W) → numpy 로 변환
-                frames_numpy = frames_tensor.numpy()
+                frames_numpy = frames_tensor.cpu().numpy().astype(np.float32)
 
                 # ONNX Runtime 실행
                 ort_inputs = {"input": frames_numpy}
@@ -53,6 +53,8 @@ def main():
                 output = torch.tensor(ort_outs[0])   # torch 텐서로 변환하면 기존 코드 재사용 가능
 
                 pred = torch.argmax(output, dim=1).item()
+
+                print("사고다" if pred ==1 else "사고 아님")
                 print("Prediction:", "Accident" if pred==1 else "Non-Accident")
                 print("Raw output:", output)
                 print("Softmax:", torch.softmax(output, dim=1))
