@@ -2,7 +2,7 @@ import torch
 from collections import deque
 import numpy as np
 import cv2
-from youngju import image_loader
+import image_loader
 import torchvision.models as models
 import torch.nn as nn 
 import torchvision.transforms as T
@@ -23,7 +23,7 @@ def main():
     # -------------------------
     # 모델 불러오기
     # -------------------------
-    ort_session = ort.InferenceSession("/home/youngjju/Hackathon/youngju/weight/video_classifier_fp16.onnx")
+    ort_session = ort.InferenceSession("/home/youngjju/Hackathon/youngju/weight/video_classifier_simplified.onnx")
     # -------------------------
     # 프레임 입력
     # -------------------------
