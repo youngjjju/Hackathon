@@ -9,6 +9,7 @@ import torchvision.transforms as T
 import onnxruntime as ort
 import os
 import time
+from AI_config import AI_config
 
 transform = T.Compose([
     T.ToPILImage(),
@@ -41,11 +42,11 @@ def main():
     # -------------------------
     # 모델 불러오기
     # -------------------------
-    ort_session = ort.InferenceSession("/home/youngju/Hackathon/youngju/weight/video_classifier_fp16.onnx")
+    ort_session = ort.InferenceSession(AI_config.weight_path)
     # -------------------------
     # 프레임 입력
     # -------------------------
-    image_path = 2  # 웹캠
+    image_path = AI_config.image_path  # 웹캠
     loader = image_loader.ImageLoader(image_path, imshow=True)
     buffer = deque(maxlen=60)
     frame_count = 0
@@ -79,9 +80,9 @@ def main():
                 original_frames = list(buffer)
                 
                 if pred == 1:
-                    save_video(original_frames, "/home/youngju/accident_eval", "accident")
+                    save_video(original_frames, AI_config.save_accident_path, "accident")
                 else:
-                    save_video(original_frames, "/home/youngju/non_accident_eval", "non_accident")
+                    save_video(original_frames, AI_config.save_non_accident_path, "non_accident")
 
             buffer.clear()
 

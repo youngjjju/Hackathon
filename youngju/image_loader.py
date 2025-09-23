@@ -1,6 +1,7 @@
 import cv2
 import time
 import os
+from AI_config import AI_config
 
 class ImageLoader: 
     def __init__(self, image_path, imshow=False):
@@ -16,9 +17,9 @@ class ImageLoader:
             self.isVideo = False
             self.total_frames = float('inf')
             # ✅ 카메라일 때 FPS/해상도 강제 설정
-            self.capture.set(cv2.CAP_PROP_FPS, 15)
-            self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, 426)   # 360p 가로 해상도
-            self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)  # 360p 세로 해상도
+            self.capture.set(cv2.CAP_PROP_FPS, AI_config.video_fps)
+            self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, AI_config.video_resolution[0])   # 360p 가로 해상도
+            self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, AI_config.video_resolution[1])  # 360p 세로 해상도
     
     def frame_generator(self):
         try:
