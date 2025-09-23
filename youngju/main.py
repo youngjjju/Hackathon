@@ -7,6 +7,8 @@ import torchvision.models as models
 import torch.nn as nn 
 import torchvision.transforms as T
 import onnxruntime as ort
+import os
+import time
 
 transform = T.Compose([
     T.ToPILImage(),
@@ -15,19 +17,35 @@ transform = T.Compose([
                 std=[0.229, 0.224, 0.225])
 ])
 
-# -------------------------
-# 학습 시 정의한 모델 다시 선언
-# -------------------------
+def save_video(frames, output_dir, label):
+    os.makedirs(output_dir, exist_ok=True)
+
+    # 현재 시간을 기반으로 파일 이름 생성
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    filename = f"{label}_{timestamp}.mp4"
+    filepath = os.path.join(output_dir, filename)
+
+    # 프레임 크기와 fps 정의
+    height, width, _ = frames[0].shape
+    fps = 15
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(filepath, fourcc, fps, (width, height))
+
+    for f in frames:
+        out.write(f)
+
+    out.release()
+    print(f"💾 Saved video: {filepath}")
 
 def main():
     # -------------------------
     # 모델 불러오기
     # -------------------------
-    ort_session = ort.InferenceSession("/home/youngjju/Hackathon/youngju/weight/video_classifier_simplified.onnx")
+    ort_session = ort.InferenceSession("/home/youngju/Hackathon/youngju/weight/video_classifier_fp16.onnx")
     # -------------------------
     # 프레임 입력
     # -------------------------
-    image_path = 0  # 웹캠
+    image_path = 2  # 웹캠
     loader = image_loader.ImageLoader(image_path, imshow=True)
     buffer = deque(maxlen=60)
     frame_count = 0
@@ -40,24 +58,30 @@ def main():
         if len(buffer) == buffer.maxlen:
             frames = [cv2.resize(f, (224,224)) for f in buffer]
             frames = [transform(f) for f in frames]   # 리스트 형태로 transform 적용
-            frames_tensor = torch.stack(frames)       # (T, C, H, W)
+            frames_tensor = torch.stack(frames).half()       # (T, C, H, W)
             frames_tensor = frames_tensor.unsqueeze(0)  # (1, T, C, H, W)
 
             with torch.no_grad():
                 # (1, T, C, H, W) → numpy 로 변환
-                frames_numpy = frames_tensor.cpu().numpy().astype(np.float32)
+                frames_numpy = frames_tensor.cpu().numpy().astype(np.float16)
 
                 # ONNX Runtime 실행
                 ort_inputs = {"input": frames_numpy}
                 ort_outs = ort_session.run(None, ort_inputs)
-                output = torch.tensor(ort_outs[0])   # torch 텐서로 변환하면 기존 코드 재사용 가능
+                output = torch.tensor(ort_outs[0]).float()   # torch 텐서로 변환하면 기존 코드 재사용 가능
 
                 pred = torch.argmax(output, dim=1).item()
 
-                print("사고다" if pred ==1 else "사고 아님")
                 print("Prediction:", "Accident" if pred==1 else "Non-Accident")
                 print("Raw output:", output)
                 print("Softmax:", torch.softmax(output, dim=1))
+                
+                original_frames = list(buffer)
+                
+                if pred == 1:
+                    save_video(original_frames, "/home/youngju/accident_eval", "accident")
+                else:
+                    save_video(original_frames, "/home/youngju/non_accident_eval", "non_accident")
 
             buffer.clear()
 

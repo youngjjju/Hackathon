@@ -15,6 +15,10 @@ class ImageLoader:
         else:
             self.isVideo = False
             self.total_frames = float('inf')
+            # ✅ 카메라일 때 FPS/해상도 강제 설정
+            self.capture.set(cv2.CAP_PROP_FPS, 15)
+            self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, 426)   # 360p 가로 해상도
+            self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)  # 360p 세로 해상도
     
     def frame_generator(self):
         try:
