@@ -5,15 +5,15 @@ from SX127x.SX127x import SX127x
 
 # SPI 초기화
 spi = spidev.SpiDev()
-spi.open(0, 0)              # SPI0, CS0
-spi.max_speed_hz = 5000000  # 5 MHz
+spi.open(0, 0)
+spi.max_speed_hz = 5000000
 
-# 핀 번호 (BCM 기준)
-NSS   = 8     # Chip Select
-RESET = 25    # Reset 핀
-DIO0  = 24    # TxDone 핀
+# 핀 설정
+NSS   = 8
+RESET = 25
+DIO0  = 24
 
-# LoRa 컨트롤러 객체 생성
+# LoRa 컨트롤러 객체
 controller = SX127x(spi, GPIO, nss_pin=NSS, reset_pin=RESET, dio0_pin=DIO0)
 
 def lora_init():
@@ -27,33 +27,24 @@ def lora_init():
     controller.set_mode(SX127x.MODE_SLEEP)
     time.sleep(0.1)
 
-    # 통신 파라미터 맞추기
-    controller.set_freq(433E6)       # 433 MHz
-    controller.set_spreading_factor(7)  # SF7
-    controller.set_bandwidth(125E3)     # 125 kHz
-    controller.set_coding_rate(5)       # CR 4/5
-    controller.set_pa_config(pa_select=1, max_power=7, output_power=15)  # PA_BOOST 출력
+    # 기본 파라미터.... 통신 거리랑 출력 등등 센더랑 리시버 맞춰야됨
+    controller.set_freq(433E6)
+    controller.set_spreading_factor(7)
+    controller.set_bandwidth(125E3)
+    controller.set_coding_rate(5)
+    controller.set_pa_config(pa_select=1, max_power=7, output_power=15)
 
-    controller.set_mode(SX127x.MODE_STDBY)   # 송신 준비 모드
+    controller.set_mode(SX127x.MODE_STDBY)
     print("LoRa TX init done.")
     return True
 
-def lora_send(data: bytes):
-    controller.write_payload(list(data))     # FIFO에 데이터 쓰기
-    controller.set_mode(SX127x.MODE_TX)      # 송신 시작
-    print("Sending packet...")
-
-    # 송신 완료 대기 (DIO0 핀 = TxDone)
-    while GPIO.input(DIO0) == 0:
-        time.sleep(0.01)
-
-    controller.clear_irq_flags(TxDone=1)     # TxDone 플래그 클리어
-    print("Send done!")
-
-# 실행부
 if __name__ == "__main__":
     if lora_init():
         while True:
-            msg = "Hello LoRa!".encode("utf-8")
-            lora_send(msg)
+            msg = "Hello LoRa!".encode("utf-8") ###여기서 msg 적으면 됨.
+            controller.send_packet(list(msg))   # 그냥 이 한 줄이면 송신 끝
+            print("Send done!")
             time.sleep(2)
+
+##############################
+# 

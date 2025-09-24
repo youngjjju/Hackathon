@@ -36,14 +36,27 @@ def lora_init():
     print("LoRa RX init done.")
     return True
 
-def lora_receive():
-    if GPIO.input(DIO0) == 1:     # 패킷 수신 완료 신호
-        payload = controller.read_payload()  # FIFO에서 바로 읽기
-        print("Received:", bytes(payload).decode("utf-8", errors="ignore"))
+def on_packet(channel):
+    payload = controller.read_payload()
+    print("Received:", bytes(payload).decode("utf-8", errors="ignore"))
+    controller.clear_irq_flags(RxDone=1)   # 플래그 클리어
 
-# 실행부
 if __name__ == "__main__":
     if lora_init():
-        while True:
-            lora_receive()
-            time.sleep(0.1)
+        # DIO0 핀에 이벤트 감지 → HIGH 될 때 콜백 실행
+        GPIO.add_event_detect(DIO0, GPIO.RISING, callback=on_packet)
+
+        print("Listening for packets...")
+        try:
+            while True:
+                time.sleep(1)  # 메인 루프는 그냥 대기
+        except KeyboardInterrupt:
+            GPIO.cleanup()
+
+
+
+#########################################################
+# 계속 수신모드 키고 콜백함수 지정해놓은 후 gpio 콜백함수 적어놓고 지내면 됨
+# 그러다가 보내고싶으면 바로 controller.send_packet
+# 엄준식
+# send_packet 마친 후 controller.set_mode(SX127x.MODE_RXCONT)
