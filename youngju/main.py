@@ -2,15 +2,45 @@ import torch
 from collections import deque
 import numpy as np
 import cv2
-import image_loader
 import torchvision.models as models
-import torch.nn as nn 
+import torch.nn as nn
 import torchvision.transforms as T
-import onnxruntime as ort
 import os
 import time
 from AI_config import AI_config
+import image_loader
 
+# -------------------------
+# VideoClassifier 정의
+# -------------------------
+
+
+class VideoClassifier(nn.Module):
+    def __init__(self, hidden_dim=256, num_classes=2):
+        super(VideoClassifier, self).__init__()
+
+        base_model = models.resnet18(weights=None)  # 학습 때와 동일하게
+        modules = list(base_model.children())[:-1]
+        self.feature_extractor = nn.Sequential(*modules)
+        self.feature_dim = base_model.fc.in_features
+
+        self.lstm = nn.LSTM(self.feature_dim, hidden_dim, batch_first=True)
+        self.fc = nn.Linear(hidden_dim, num_classes)
+
+    def forward(self, x):
+        # x: (B, T, C, H, W)
+        B, T, C, H, W = x.shape
+        x = x.view(B*T, C, H, W)
+        feats = self.feature_extractor(x)       # (B*T, feature_dim, 1, 1)
+        feats = feats.view(B, T, -1)            # (B, T, feature_dim)
+        _, (h_n, _) = self.lstm(feats)          # h_n: (1, B, hidden_dim)
+        out = self.fc(h_n[-1])                  # (B, num_classes)
+        return out
+
+
+# -------------------------
+# 전처리 정의
+# -------------------------
 transform = T.Compose([
     T.ToPILImage(),
     T.ToTensor(),
@@ -18,15 +48,17 @@ transform = T.Compose([
                 std=[0.229, 0.224, 0.225])
 ])
 
+# -------------------------
+# 비디오 저장 함수
+# -------------------------
+
+
 def save_video(frames, output_dir, label):
     os.makedirs(output_dir, exist_ok=True)
-
-    # 현재 시간을 기반으로 파일 이름 생성
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     filename = f"{label}_{timestamp}.mp4"
     filepath = os.path.join(output_dir, filename)
 
-    # 프레임 크기와 fps 정의
     height, width, _ = frames[0].shape
     fps = 15
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -38,53 +70,65 @@ def save_video(frames, output_dir, label):
     out.release()
     print(f"💾 Saved video: {filepath}")
 
+# -------------------------
+# 추론 메인 함수
+# -------------------------
+
+
 def main():
-    # -------------------------
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     # 모델 불러오기
-    # -------------------------
-    ort_session = ort.InferenceSession(AI_config.weight_path)
-    # -------------------------
+    model = VideoClassifier(hidden_dim=256, num_classes=2).to(device)
+    model.load_state_dict(torch.load(
+        AI_config.weight_path, map_location=device))
+    model.eval()
+
     # 프레임 입력
-    # -------------------------
-    image_path = AI_config.image_path  # 웹캠
+    image_path = AI_config.image_path  # 웹캠 또는 동영상 경로
     loader = image_loader.ImageLoader(image_path, imshow=True)
-    buffer = deque(maxlen=60)
-    frame_count = 0
+
+
+    buffer_tensor = deque(maxlen=60)  # 모델 입력용
+    buffer_raw = deque(maxlen=60)     # 저장용 (numpy frame)
     
+    frame_count = 0
+
     for frame in loader.frame_generator():
         frame_count += 1
         if frame_count % 2 == 0:
-            buffer.append(frame)
+            # 저장용: 원본 프레임 그대로
+            buffer_raw.append(frame.copy())
 
-        if len(buffer) == buffer.maxlen:
-            frames = [cv2.resize(f, (224,224)) for f in buffer]
-            frames = [transform(f) for f in frames]   # 리스트 형태로 transform 적용
-            frames_tensor = torch.stack(frames).half()       # (T, C, H, W)
-            frames_tensor = frames_tensor.unsqueeze(0)  # (1, T, C, H, W)
+            # 추론용: 224x224 resize + transform
+            frame_resized = cv2.resize(frame, (224, 224))
+            frame_tensor = transform(frame_resized)
+            buffer_tensor.append(frame_tensor)
+
+        if len(buffer_tensor) == buffer_tensor.maxlen:
+            frames_tensor = torch.stack(list(buffer_tensor))         # (T, C, H, W)
+            frames_tensor = frames_tensor.unsqueeze(
+                0).to(device)    # (1, T, C, H, W)
 
             with torch.no_grad():
-                # (1, T, C, H, W) → numpy 로 변환
-                frames_numpy = frames_tensor.cpu().numpy().astype(np.float16)
-
-                # ONNX Runtime 실행
-                ort_inputs = {"input": frames_numpy}
-                ort_outs = ort_session.run(None, ort_inputs)
-                output = torch.tensor(ort_outs[0]).float()   # torch 텐서로 변환하면 기존 코드 재사용 가능
-
+                output = model(frames_tensor)
                 pred = torch.argmax(output, dim=1).item()
+                probs = torch.softmax(output, dim=1)
 
-                print("Prediction:", "Accident" if pred==1 else "Non-Accident")
-                print("Raw output:", output)
-                print("Softmax:", torch.softmax(output, dim=1))
-                
-                original_frames = list(buffer)
-                
-                if pred == 1:
-                    save_video(original_frames, AI_config.save_accident_path, "accident")
-                else:
-                    save_video(original_frames, AI_config.save_non_accident_path, "non_accident")
+            print("Prediction:", "Accident" if pred == 1 else "Non-Accident")
+            print("Raw output:", output)
+            print("Softmax:", probs)
 
-            buffer.clear()
+            if pred == 1:
+                save_video(list(buffer_raw),
+                        AI_config.save_accident_path, "accident")
+            else:
+                save_video(list(buffer_raw),
+                        AI_config.save_non_accident_path, "non_accident")
+
+            buffer_tensor.clear()
+            buffer_raw.clear()
+
 
 if __name__ == "__main__":
     main()

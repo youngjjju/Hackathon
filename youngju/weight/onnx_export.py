@@ -8,7 +8,7 @@ import torchvision.models as models
 class VideoClassifier(nn.Module):
     def __init__(self, hidden_dim=256, num_classes=2):
         super(VideoClassifier, self).__init__()
-        base_model = models.resnet18(weights=None)
+        base_model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
         modules = list(base_model.children())[:-1]
         self.feature_extractor = nn.Sequential(*modules)
         self.feature_dim = base_model.fc.in_features
