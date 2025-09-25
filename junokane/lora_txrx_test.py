@@ -29,10 +29,10 @@ def lora_init():
     # RF 설정
     lora.setFrequency(433_000_000)
     lora.setLoRaModulation(sf=7, bw=125_000, cr=5, low_datarate_opt=False)
-    lora.setTxPower(17, None)   # 두번째 인자는 라이브러리 상수 확인
+    lora.setTxPower(17, 1)   # 두번째 인자는 라이브러리 상수 확인
     lora.setRxGain(0)           # 기본 gain
     lora.setLoRaPacket(header_type=0, preamble=8, payload_len=255, crc_enable=True, invert_iq=False)
-    lora.setSyncWord(0x12)
+    lora.setSyncWord(0x12)  
 
     # IRQ 콜백
     lora.onReceive(on_packet)
@@ -48,9 +48,10 @@ def on_packet(data_bytes):
     try:
         msg = bytes(data_bytes).decode('utf-8', errors='ignore')
     except:
-        msg = str(data_bytes)
+        msg = str(data_bytes)   ##### 디코딩 실패하면 그냥 숫자로라도 나오게
     print("Received:", msg)
     print("RSSI:", lora.packetRssi(), "SNR:", lora.snr())
+    ## 위에건 신호세기랑 노이즈 역 비율 (높을수록 노이즈 없음)
 
 def lora_send(msg: str):
     lora.beginPacket()
